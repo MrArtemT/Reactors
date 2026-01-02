@@ -1,31 +1,36 @@
-return {
-  fluid = {
-    label = "Низкотемпературный хладагент",
-    name  = "low_temperature_refrigerant",
-  },
+-- /home/reactorctl/config.lua
+local cfg = {}
 
-  minFluid = 80000,          -- mB
-  pollEveryReactor = 1.5,    -- сек
-  pollEveryFluid   = 30,     -- сек
-  beepOnAlarm      = true,
+cfg.maxReactors = 6
 
-  maxReactors = 6,
-
-  -- Цвета (можешь править)
-  colors = {
-    bg      = 0x0B0D10,
-    panel   = 0x11161C,
-    card    = 0x0F1318,
-    border  = 0x2A3340,
-    text    = 0xE6EEF7,
-    dim     = 0x9AA7B6,
-
-    red     = 0xFF4D5E,
-    green   = 0x2EE59D,
-    blue    = 0x4DA3FF,
-    orange  = 0xFFB020,
-    yellow  = 0xFFD84D,
-  }
+cfg.fluid = {
+  label = "Низкотемпературный хладагент",
+  name  = "low_temperature_refrigerant",
 }
 
-return M
+cfg.minFluid = 80000
+
+-- UI refresh rates
+cfg.pollEveryReactor = 1.5
+cfg.pollEveryFluid   = 30
+
+cfg.beepOnAlarm = true
+
+-- Colors (single theme)
+cfg.colors = {
+  bg     = 0x101010,
+  panel  = 0x1A1A1A,
+  card   = 0x161616,
+
+  text   = 0xEAEAEA,
+  dim    = 0xA0A0A0,
+
+  border = 0x5A5A5A,
+
+  red    = 0xD43C3C,
+  green  = 0x2ECC71,
+  blue   = 0x3498DB,
+  orange = 0xF39C12,
+}
+
+return cfg
