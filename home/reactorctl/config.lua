@@ -27,3 +27,5 @@ return {
     yellow  = 0xFFD84D,
   }
 }
+
+return M
