@@ -1,3 +1,4 @@
+cat <<'EOF' > /home/reactorctl/config.lua
 -- /home/reactorctl/config.lua
 local cfg = {}
 
@@ -10,13 +11,11 @@ cfg.fluid = {
 
 cfg.minFluid = 80000
 
--- UI refresh rates
 cfg.pollEveryReactor = 1.5
 cfg.pollEveryFluid   = 30
 
 cfg.beepOnAlarm = true
 
--- Colors (single theme)
 cfg.colors = {
   bg     = 0x101010,
   panel  = 0x1A1A1A,
@@ -34,3 +33,4 @@ cfg.colors = {
 }
 
 return cfg
+EOF
