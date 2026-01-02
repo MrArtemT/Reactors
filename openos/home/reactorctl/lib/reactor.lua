@@ -1,6 +1,4 @@
--- /home/reactorctl/lib/reactor.lua
 local component = require("component")
-local Util = require("util")
 
 local Reactor = {}
 Reactor.__index = Reactor
@@ -16,41 +14,21 @@ end
 function Reactor:status()
   local p = self.proxy
 
-  local active = false
-  local temp = nil
-  local gen = nil
-  local coolant = nil
-  local coolantMax = nil
-  local rod = nil
-
-  pcall(function() active = p.hasWork() end)
-  pcall(function() temp = p.getTemperature() end)
-  pcall(function() gen = p.getEnergyGeneration() end)
-
-  -- These exist in your adapter dump:
-  pcall(function() coolant = p.getFluidCoolant() end)
-  pcall(function() coolantMax = p.getMaxFluidCoolant() end)
-
-  -- Optional - might not exist or might require selector setup, so keep safe
-  pcall(function()
-    local r = p.getSelectStatusRod()
-    if r and type(r) == "table" then
-      rod = r
-    end
-  end)
-
-  return {
-    active = active and true or false,
-    temp = temp,
-    gen = gen,
-    coolant = coolant,
-    coolantMax = coolantMax,
-    rod = rod,
+  local st = {
+    active = false,
+    temp = nil,
+    gen = nil,
+    coolant = nil,
+    coolantMax = nil,
   }
-end
 
-function Reactor:activate()
-  pcall(function() self.proxy.activate() end)
+  pcall(function() st.active = p.hasWork() and true or false end)
+  pcall(function() st.temp = p.getTemperature() end)
+  pcall(function() st.gen = p.getEnergyGeneration() end)
+  pcall(function() st.coolant = p.getFluidCoolant() end)
+  pcall(function() st.coolantMax = p.getMaxFluidCoolant() end)
+
+  return st
 end
 
 function Reactor:deactivate()
@@ -66,7 +44,7 @@ function M.discover(ignore)
       out[#out+1] = Reactor.new(addr)
     end
   end
-  table.sort(out, function(a,b) return a.addr < b.addr end)
+  table.sort(out, function(a, b) return a.addr < b.addr end)
   return out
 end
 
