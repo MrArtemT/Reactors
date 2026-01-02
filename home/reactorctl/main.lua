@@ -2,12 +2,22 @@ local component = require("component")
 local event = require("event")
 local term = require("term")
 local computer = require("computer")
+local fs = require("filesystem")
+local shell = require("shell")
 
-local cfg = require("reactorctl/config")
-local UI = require("reactorctl/lib/ui")
-local Icons = require("reactorctl/lib/icons")
-local Dev = require("reactorctl/lib/devices")
-local Log = require("reactorctl/lib/log")
+-- Base dir = folder where main.lua is located
+local BASE = fs.path(shell.getRunningProgram()):gsub("/$", "")
+if BASE == "" then BASE = "/home/reactorctl" end
+
+local function load(rel)
+  return dofile(BASE .. "/" .. rel)
+end
+
+local cfg   = load("config.lua")
+local UI    = load("lib/ui.lua")
+local Icons = load("lib/icons.lua")
+local Dev   = load("lib/devices.lua")
+local Log   = load("lib/log.lua")
 
 local gpu = component.gpu
 local sw, sh = gpu.getResolution()
