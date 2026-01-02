@@ -9,13 +9,10 @@ end
 
 local internet = component.internet
 
--- Repo base (raw)
+-- IMPORTANT: correct path (reactorctl, not reactorct1)
 local BASE = "https://raw.githubusercontent.com/MrArtemT/Reactors/main/home/reactorctl/"
-
--- Install dir
 local INSTALL_DIR = "/home/reactorctl"
 
--- Fallback list (если manifest.lua не найден) - поправь под свои реальные файлы
 local FALLBACK = {
   "main.lua",
   "config.lua",
@@ -24,6 +21,8 @@ local FALLBACK = {
   "lib/devices.lua",
   "lib/log.lua",
 }
+
+local function printStep(msg) io.write(msg .. "\n") end
 
 local function readAll(handle)
   local chunks = {}
@@ -58,80 +57,140 @@ local function writeFile(path, data)
   return true
 end
 
+local function readFile(path)
+  local f = io.open(path, "r")
+  if not f then return nil end
+  local d = f:read("*a")
+  f:close()
+  return d
+end
+
 local function join(a, b)
   if a:sub(-1) == "/" then return a .. b end
   return a .. "/" .. b
 end
 
-local function printStep(msg)
-  io.write(msg .. "\n")
+-- MD5 helper (OpenOS: /bin/md5sum exists in most distros)
+local function md5_of_string(s)
+  local tmp = "/tmp/reactorctl_md5.tmp"
+  local f = io.open(tmp, "w"); f:write(s); f:close()
+  local p = io.popen("md5sum " .. tmp)
+  local out = p:read("*l") or ""
+  p:close()
+  fs.remove(tmp)
+  return out:match("^(%w+)") or ""
 end
 
--- 1) Create base dir
-if not fs.exists(INSTALL_DIR) then
-  fs.makeDirectory(INSTALL_DIR)
-end
-if not fs.exists(INSTALL_DIR .. "/lib") then
-  fs.makeDirectory(INSTALL_DIR .. "/lib")
+local function md5_of_file(path)
+  if not fs.exists(path) then return nil end
+  local p = io.popen("md5sum " .. path)
+  local out = p:read("*l") or ""
+  p:close()
+  return out:match("^(%w+)") or ""
 end
 
--- 2) Try load manifest.lua
-local files = nil
-do
+local function loadManifest()
   local manifestUrl = join(BASE, "manifest.lua")
   printStep("Fetching manifest: " .. manifestUrl)
   local src = httpGet(manifestUrl)
-  if src and #src > 0 and src:find("return", 1, true) then
-    local ok, chunk = pcall(load, src, "=manifest")
-    if ok and chunk then
-      local ok2, list = pcall(chunk)
-      if ok2 and type(list) == "table" and #list > 0 then
-        files = list
-        printStep("Manifest OK. Files: " .. tostring(#files))
-      end
-    end
-  end
+  if not src or #src == 0 then return nil end
+
+  local ok, chunk = pcall(load, src, "=manifest")
+  if not ok or not chunk then return nil end
+
+  local ok2, list = pcall(chunk)
+  if not ok2 or type(list) ~= "table" or #list == 0 then return nil end
+  return list
 end
 
-if not files then
-  files = FALLBACK
-  printStep("Manifest not found - using fallback list. Files: " .. tostring(#files))
+local function ensureBaseDirs()
+  if not fs.exists(INSTALL_DIR) then fs.makeDirectory(INSTALL_DIR) end
+  if not fs.exists(INSTALL_DIR .. "/lib") then fs.makeDirectory(INSTALL_DIR .. "/lib") end
 end
 
--- 3) Download files
-local okCount, failCount = 0, 0
-for _, rel in ipairs(files) do
-  local url = join(BASE, rel)
-  local dst = join(INSTALL_DIR, rel)
-  printStep("Downloading: " .. rel)
-
-  local body, err = httpGet(url)
-  if not body then
-    io.stderr:write("  FAILED: " .. tostring(err) .. "\n")
-    failCount = failCount + 1
-  else
-    local okW, errW = writeFile(dst, body)
-    if not okW then
-      io.stderr:write("  WRITE FAILED: " .. tostring(errW) .. "\n")
-      failCount = failCount + 1
-    else
-      okCount = okCount + 1
-    end
-  end
-end
-
--- 4) Launcher
-local launcherPath = "/home/reactorctl.lua"
-local launcher = ([[-- ReactorCTL launcher
+local function writeLauncher()
+  local launcherPath = "/home/reactorctl.lua"
+  local launcher = ([[-- ReactorCTL launcher
 local ok, err = pcall(dofile, "%s/main.lua")
 if not ok then
   io.stderr:write("ReactorCTL failed: " .. tostring(err) .. "\n")
 end
 ]]):format(INSTALL_DIR)
 
-writeFile(launcherPath, launcher)
+  writeFile(launcherPath, launcher)
+end
+
+-- mode: install | update (default: install)
+local mode = (shell.args()[1] or "install"):lower()
+if mode ~= "install" and mode ~= "update" then mode = "install" end
+
+ensureBaseDirs()
+
+local files = loadManifest()
+if not files then
+  files = FALLBACK
+  printStep("Manifest not found - using fallback list. Files: " .. tostring(#files))
+else
+  printStep("Manifest OK. Files: " .. tostring(#files))
+end
+
+local okCount, failCount, updCount, skipCount = 0, 0, 0, 0
+
+for _, rel in ipairs(files) do
+  local url = join(BASE, rel)
+  local dst = join(INSTALL_DIR, rel)
+
+  if mode == "update" then
+    -- compare hashes and skip unchanged
+    local remote, err = httpGet(url)
+    if not remote then
+      io.stderr:write("FAILED: " .. rel .. " (" .. tostring(err) .. ")\n")
+      failCount = failCount + 1
+    else
+      local remoteMd5 = md5_of_string(remote)
+      local localMd5 = md5_of_file(dst)
+
+      if localMd5 and localMd5 == remoteMd5 then
+        printStep("SKIP: " .. rel)
+        skipCount = skipCount + 1
+      else
+        printStep((localMd5 and "UPDATE: " or "NEW: ") .. rel)
+        local okW, errW = writeFile(dst, remote)
+        if not okW then
+          io.stderr:write("WRITE FAILED: " .. rel .. " (" .. tostring(errW) .. ")\n")
+          failCount = failCount + 1
+        else
+          updCount = updCount + 1
+          okCount = okCount + 1
+        end
+      end
+    end
+  else
+    -- install: always download
+    printStep("Downloading: " .. rel)
+    local body, err = httpGet(url)
+    if not body then
+      io.stderr:write("FAILED: " .. rel .. " (" .. tostring(err) .. ")\n")
+      failCount = failCount + 1
+    else
+      local okW, errW = writeFile(dst, body)
+      if not okW then
+        io.stderr:write("WRITE FAILED: " .. rel .. " (" .. tostring(errW) .. ")\n")
+        failCount = failCount + 1
+      else
+        okCount = okCount + 1
+      end
+    end
+  end
+end
+
+writeLauncher()
 
 printStep("")
-printStep("Install complete.")
-printStep("OK: " .. okCount .. " | Failed: " .. failCount)
+printStep("Done (" .. mode .. ").")
+if mode == "update" then
+  printStep("Updated/New: " .. updCount .. " | Skipped: " .. skipCount .. " | Failed: " .. failCount)
+else
+  printStep("OK: " .. okCount .. " | Failed: " .. failCount)
+end
 printStep("Run: lua /home/reactorctl.lua")
