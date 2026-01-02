@@ -6,10 +6,7 @@ local function nowTime()
 end
 
 function M.new(maxLines)
-  return {
-    maxLines = maxLines or 200,
-    lines = {}
-  }
+  return { maxLines = maxLines or 200, lines = {} }
 end
 
 function M.push(L, msg)
@@ -21,10 +18,10 @@ function M.push(L, msg)
   end
 end
 
--- Разбивка длинных строк на 2+ строки, чтобы не уезжало за экран
 function M.wrapLines(text, width)
   local out = {}
   text = tostring(text or "")
+  if width < 1 then width = 1 end
   while #text > width do
     table.insert(out, text:sub(1, width))
     text = text:sub(width + 1)
