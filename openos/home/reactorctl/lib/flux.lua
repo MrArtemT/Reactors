@@ -1,4 +1,3 @@
--- /home/reactorctl/lib/flux.lua
 local component = require("component")
 
 local Flux = {}
@@ -14,10 +13,7 @@ end
 function Flux:energyInfo()
   local p = self.proxy
   local info = {}
-  pcall(function() info.network = p.getNetworkInfo() end)
-  pcall(function() info.energy  = p.getEnergyInfo() end)
-  pcall(function() info.flux    = p.getFluxInfo() end)
-  pcall(function() info.count   = p.getCountInfo() end)
+  pcall(function() info.energy = p.getEnergyInfo() end)
   return info
 end
 
