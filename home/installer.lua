@@ -121,7 +121,8 @@ end
 end
 
 -- mode: install | update (default: install)
-local mode = (shell.args()[1] or "install"):lower()
+local args = {...}
+local mode = tostring(args[1] or "install"):lower()
 if mode ~= "install" and mode ~= "update" then mode = "install" end
 
 ensureBaseDirs()
