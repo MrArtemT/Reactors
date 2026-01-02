@@ -119,12 +119,14 @@ local function main()
     local fluxInfo = flux and flux:energyInfo() or nil
     local meInfo = me and me:energyInfo() or nil
 
-    UI.drawAll({
-      alarm = anyAlarm,
-      reactors = rows,
-      flux = fluxInfo,
-      me = meInfo,
-    })
+UI.drawAll({
+  alarm = anyAlarm,
+  reactors = rows,
+  reactorCount = #reactors,
+  uptime = computer.uptime(),
+  flux = fluxInfo,
+  me = meInfo,
+})
 
     if anyAlarm then safeBeep() end
   end
