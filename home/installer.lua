@@ -8,7 +8,7 @@ end
 
 local internet = component.internet
 
--- RAW base URL (проверь путь!)
+-- IMPORTANT: correct folder name
 local BASE = "https://raw.githubusercontent.com/MrArtemT/Reactors/main/home/reactorctl/"
 local INSTALL_DIR = "/home/reactorctl"
 
@@ -21,6 +21,8 @@ local FALLBACK = {
   "lib/log.lua",
 }
 
+local function println(s) io.write(tostring(s) .. "\n") end
+
 local function join(a, b)
   if a:sub(-1) == "/" then return a .. b end
   return a .. "/" .. b
@@ -31,7 +33,7 @@ local function readAll(handle)
   while true do
     local chunk = handle.read(8192)
     if not chunk then break end
-    out[#out+1] = chunk
+    out[#out + 1] = chunk
   end
   handle.close()
   return table.concat(out)
@@ -61,19 +63,17 @@ local function writeFile(path, data)
   return true
 end
 
-local function readFile(path)
-  local f = io.open(path, "r")
-  if not f then return nil end
-  local d = f:read("*a")
-  f:close()
-  return d
-end
-
-local function println(s) io.write(tostring(s).."\n") end
-
-local function ensureDirs()
-  if not fs.exists(INSTALL_DIR) then fs.makeDirectory(INSTALL_DIR) end
-  if not fs.exists(INSTALL_DIR.."/lib") then fs.makeDirectory(INSTALL_DIR.."/lib") end
+local function rmrf(path)
+  if not fs.exists(path) then return end
+  for file in fs.list(path) do
+    local p = path .. "/" .. file
+    if fs.isDirectory(p) then
+      rmrf(p:sub(1, -2)) -- remove trailing /
+    else
+      fs.remove(p)
+    end
+  end
+  fs.remove(path)
 end
 
 local function loadManifest()
@@ -98,16 +98,19 @@ if not ok then
   io.stderr:write("ReactorCTL failed: " .. tostring(err) .. "\n")
 end
 ]]):format(INSTALL_DIR)
-
   writeFile(launcherPath, launcher)
 end
 
--- MODE: install / update (берём из {...}, без shell/process)
-local args = {...}
-local mode = tostring(args[1] or "install"):lower()
-if mode ~= "install" and mode ~= "update" then mode = "install" end
+-- ---------- CLEAN REINSTALL ----------
+println("ReactorCTL: clean reinstall")
+println("Removing: " .. INSTALL_DIR)
 
-ensureDirs()
+if fs.exists(INSTALL_DIR) then
+  rmrf(INSTALL_DIR)
+end
+
+fs.makeDirectory(INSTALL_DIR)
+fs.makeDirectory(INSTALL_DIR .. "/lib")
 
 local files = loadManifest()
 if not files then
@@ -117,41 +120,24 @@ else
   println("Manifest OK. Files: " .. tostring(#files))
 end
 
-local updated, skipped, failed = 0, 0, 0
+local okCount, failCount = 0, 0
 
 for _, rel in ipairs(files) do
   local url = join(BASE, rel)
   local dst = join(INSTALL_DIR, rel)
 
-  local remote, err = httpGet(url)
-  if not remote then
-    io.stderr:write("FAILED: "..rel.." ("..tostring(err)..")\n")
-    failed = failed + 1
+  println("Downloading: " .. rel)
+  local body, err = httpGet(url)
+  if not body then
+    io.stderr:write("FAILED: " .. rel .. " (" .. tostring(err) .. ")\n")
+    failCount = failCount + 1
   else
-    if mode == "update" then
-      local localData = readFile(dst)
-      if localData ~= nil and localData == remote then
-        println("SKIP: " .. rel)
-        skipped = skipped + 1
-      else
-        println((localData and "UPDATE: " or "NEW: ") .. rel)
-        local okW, errW = writeFile(dst, remote)
-        if not okW then
-          io.stderr:write("WRITE FAILED: "..rel.." ("..tostring(errW)..")\n")
-          failed = failed + 1
-        else
-          updated = updated + 1
-        end
-      end
+    local okW, errW = writeFile(dst, body)
+    if not okW then
+      io.stderr:write("WRITE FAILED: " .. rel .. " (" .. tostring(errW) .. ")\n")
+      failCount = failCount + 1
     else
-      println("Downloading: " .. rel)
-      local okW, errW = writeFile(dst, remote)
-      if not okW then
-        io.stderr:write("WRITE FAILED: "..rel.." ("..tostring(errW)..")\n")
-        failed = failed + 1
-      else
-        updated = updated + 1
-      end
+      okCount = okCount + 1
     end
   end
 end
@@ -159,5 +145,5 @@ end
 writeLauncher()
 
 println("")
-println("Done ("..mode.."). Updated/New: "..updated.." | Skipped: "..skipped.." | Failed: "..failed)
+println("Done (reinstall). OK: " .. okCount .. " | Failed: " .. failCount)
 println("Run: lua /home/reactorctl.lua")
